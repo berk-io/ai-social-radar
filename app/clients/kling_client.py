@@ -7,6 +7,10 @@ media editor.
 
 from __future__ import annotations
 
+import base64
+import hashlib
+import hmac
+import json
 import time
 from dataclasses import dataclass
 from pathlib import Path
@@ -19,13 +23,11 @@ from app.logging_setup import get_logger
 
 logger = get_logger(__name__)
 
-
 @dataclass(frozen=True)
 class KlingVideoResult:
     task_id: str
     video_url: str
     local_path: Path
-
 
 def _extract_task_id(data: Dict[str, Any]) -> Optional[str]:
     for key in ("task_id", "taskId", "id"):
@@ -36,7 +38,6 @@ def _extract_task_id(data: Dict[str, Any]) -> Optional[str]:
     if isinstance(inner, dict):
         return _extract_task_id(inner)
     return None
-
 
 def _extract_video_url(data: Dict[str, Any]) -> Optional[str]:
     for key in ("url", "video_url", "videoUrl", "output_url", "result_url"):
@@ -53,12 +54,10 @@ def _extract_video_url(data: Dict[str, Any]) -> Optional[str]:
         return _extract_video_url(data_inner)
     return None
 
-
 def _normalize_status(raw: Optional[str]) -> str:
     if not raw:
         return ""
     return str(raw).strip().lower()
-
 
 class KlingClient:
     def __init__(
@@ -70,10 +69,38 @@ class KlingClient:
         rate_limiter: RateLimiter,
     ) -> None:
         self._api_key: str = api_key
-        self._base_url: str = base_url.rstrip("/")
+        # Cursor'ın yazdığı hatalı adresi otomatik düzeltiyoruz
+        self._base_url: str = base_url.replace("api.klingapi.com", "api.klingai.com").rstrip("/")
         self._model: str = model
         self._timeout_seconds: float = timeout_seconds
         self._rate_limiter: RateLimiter = rate_limiter
+
+    def _get_jwt_token(self) -> str:
+        if ":" not in self._api_key:
+            return self._api_key
+        
+        ak, sk = self._api_key.split(":", 1)
+        ak = ak.strip()
+        sk = sk.strip()
+        
+        header = {"alg": "HS256", "typ": "JWT"}
+        payload = {
+            "iss": ak,
+            "exp": int(time.time()) + 1800,
+            "nbf": int(time.time()) - 5
+        }
+        
+        def b64url(data: bytes) -> str:
+            return base64.urlsafe_b64encode(data).rstrip(b'=').decode('utf-8')
+        
+        header_enc = b64url(json.dumps(header).encode('utf-8'))
+        payload_enc = b64url(json.dumps(payload).encode('utf-8'))
+        
+        msg = f"{header_enc}.{payload_enc}"
+        signature = hmac.new(sk.encode('utf-8'), msg.encode('utf-8'), hashlib.sha256).digest()
+        sig_enc = b64url(signature)
+        
+        return f"{msg}.{sig_enc}"
 
     def _build_visual_prompt(self, english_word: str) -> str:
         return (
@@ -85,16 +112,14 @@ class KlingClient:
     def create_text_to_video_task(self, english_word: str) -> str:
         url: str = f"{self._base_url}/v1/videos/text2video"
         headers: Dict[str, str] = {
-            "Authorization": f"Bearer {self._api_key}",
+            "Authorization": f"Bearer {self._get_jwt_token()}",
             "Content-Type": "application/json",
         }
         payload: Dict[str, Any] = {
             "model": self._model,
             "prompt": self._build_visual_prompt(english_word=english_word),
-            "duration": 5,
+            "duration": "5",
             "aspect_ratio": "9:16",
-            "mode": "standard",
-            "negative_prompt": "speech, talking head, subtitles, watermark, distorted faces, text overlay",
         }
 
         def do_request() -> requests.Response:
@@ -126,13 +151,13 @@ class KlingClient:
 
     def wait_for_video_url(self, task_id: str, max_wait_seconds: int = 900) -> str:
         url: str = f"{self._base_url}/v1/videos/{task_id}"
-        headers: Dict[str, str] = {"Authorization": f"Bearer {self._api_key}"}
+        headers: Dict[str, str] = {"Authorization": f"Bearer {self._get_jwt_token()}"}
 
         start: float = time.monotonic()
         last_status: Optional[str] = None
 
         terminal_fail: set[str] = {"failed", "error", "cancelled", "canceled"}
-        terminal_ok: set[str] = {"completed", "complete", "success", "succeeded", "done"}
+        terminal_ok: set[str] = {"completed", "complete", "success", "succeeded", "done", "succeed"}
 
         while True:
             elapsed: float = time.monotonic() - start
