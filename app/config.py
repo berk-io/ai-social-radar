@@ -17,11 +17,12 @@ from pydantic import BaseModel, Field
 class AppConfig(BaseModel):
     openai_api_key: str = Field(min_length=1)
     openai_model: str = Field(default="gpt-4o-mini", min_length=1)
+    openai_tts_model: str = Field(default="tts-1", min_length=1)
+    openai_tts_voice: str = Field(default="nova", min_length=1)
 
-    did_api_key: str = Field(min_length=1)
-    did_base_url: str = Field(default="https://api.d-id.com", min_length=1)
-    did_source_image_url: str = Field(min_length=1)
-    did_voice_id: str = Field(default="en-US-JennyNeural", min_length=1)
+    kling_api_key: str = Field(min_length=1)
+    kling_base_url: str = Field(default="https://api.klingapi.com", min_length=1)
+    kling_model: str = Field(default="kling-v2.5-turbo", min_length=1)
 
     ig_access_token: Optional[str] = None
     ig_user_id: Optional[str] = None
@@ -53,10 +54,11 @@ def load_config(dotenv_path: Optional[str] = None) -> AppConfig:
     config: AppConfig = AppConfig(
         openai_api_key=os.getenv("OPENAI_API_KEY", ""),
         openai_model=os.getenv("OPENAI_MODEL", "gpt-4o-mini"),
-        did_api_key=os.getenv("DID_API_KEY", ""),
-        did_base_url=os.getenv("DID_BASE_URL", "https://api.d-id.com"),
-        did_source_image_url=os.getenv("DID_SOURCE_IMAGE_URL", ""),
-        did_voice_id=os.getenv("DID_VOICE_ID", "en-US-JennyNeural"),
+        openai_tts_model=os.getenv("OPENAI_TTS_MODEL", "tts-1"),
+        openai_tts_voice=os.getenv("OPENAI_TTS_VOICE", "nova"),
+        kling_api_key=os.getenv("KLING_API_KEY", ""),
+        kling_base_url=os.getenv("KLING_BASE_URL", "https://api.klingapi.com"),
+        kling_model=os.getenv("KLING_MODEL", "kling-v2.5-turbo"),
         ig_access_token=os.getenv("IG_ACCESS_TOKEN"),
         ig_user_id=os.getenv("IG_USER_ID"),
         tiktok_access_token=os.getenv("TIKTOK_ACCESS_TOKEN"),
@@ -68,4 +70,3 @@ def load_config(dotenv_path: Optional[str] = None) -> AppConfig:
         output_dir=os.getenv("OUTPUT_DIR", "output"),
     )
     return config
-

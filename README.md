@@ -1,21 +1,22 @@
-# Otomatik Kısa Video Yayınlama Sistemi (Instagram Reels + TikTok)
+# İngilizce Kelime Öğretimi — Kısa Video Yayınlama Sistemi (Instagram Reels + TikTok)
 
-Bu çözüm, her gün otomatik olarak kısa video içeriği üretip (metin → konuşan video) Instagram Reels ve TikTok’a sırayla yayınlamak için tasarlanmış kurumsal güvenli bir içerik hattıdır. Amaç; **zamandan tasarruf**, **tutarlı yayın akışı**, **izlenebilir çıktı arşivi** ve **operasyonel risklerin azaltılmasıdır**.
+Bu çözüm, günlük **İngilizce kelime + Türkçe karşılık** formatında kısa dikey videolar üretir; **OpenAI ile metin ve ses**, **Kling AI ile arka plan görüntüsü**, **MoviePy ile birleşik çıktı** üretir ve ardından Instagram Reels ile TikTok’a yayın akışına hazırlar. Amaç; **tutarlı eğitim içeriği**, **yerel arşiv (output/)**, **operasyonel güvenilirlik** ve **kurumsal güvenli yapılandırma**dır.
 
 ## İş Değeri (Ne Sağlar?)
 
-- **Günlük içerik otomasyonu**: Tek komutla senaryo üretir, videoya çevirir ve yayınlar.
-- **Veri bütünlüğü**: Üretilen videolar yerel `output/` klasöründe saklanır.
-- **Kurumsal güven**: Hata yakalama, oran-limit yönetimi, istek hızlandırma (throttling) ve güvenli `.env` yapılandırması içerir.
-- **Platform uyumluluğu**: Instagram ve TikTok için ayrı yayınlayıcı modüllerle genişletilebilir mimari.
+- **Günlük kelime otomasyonu**: Tek komutla kelime çifti, seslendirme, arka plan videosu ve birleşik yayın dosyası üretir.
+- **Veri bütünlüğü**: Ara ve nihai dosyalar `output/` altında saklanır.
+- **Kurumsal güven**: Hata yakalama, oran-limit, istek hızlandırma (throttling) ve `.env` ile gizli anahtar yönetimi.
+- **Platform hazırlığı**: Instagram ve TikTok için yayın modülleri genişletilebilir şekilde ayrılmıştır.
 
 ## Kurulum
 
 ### 1) Ortamı Hazırlayın
 
 - Python 3.11+ önerilir.
+- **Metin üstü yazısı (MoviePy TextClip)** için birçok kurulumda **ImageMagick** gerekir. Windows’ta metin hatası alırsanız ImageMagick kurulumunu tamamlayın veya MoviePy dokümantasyonundaki yolu yapılandırın.
 
-Sanal ortam oluşturma:
+Sanal ortam:
 
 ```bash
 python -m venv .venv
@@ -27,7 +28,7 @@ Aktifleştirme (Windows PowerShell):
 .venv\Scripts\Activate.ps1
 ```
 
-Bağımlılıkları yükleyin:
+Bağımlılıklar:
 
 ```bash
 pip install -r requirements.txt
@@ -35,50 +36,40 @@ pip install -r requirements.txt
 
 ### 2) API Anahtarlarını Girin (.env)
 
-Proje kökünde `.env` dosyası oluşturun ve `.env.example` içeriğini kopyalayın.
+Proje kökünde `.env` oluşturun; `.env.example` dosyasını kopyalayın.
 
 - **OpenAI**
-  - `OPENAI_API_KEY`: OpenAI API anahtarınız
-  - `OPENAI_MODEL`: Kullanılacak model (varsayılan: `gpt-4o-mini`)
-- **D-ID**
-  - `DID_API_KEY`: D-ID API anahtarınız
-  - `DID_SOURCE_IMAGE_URL`: Konuşan kafa videosu için kullanılacak **statik görselin URL’si**
-  - `DID_VOICE_ID`: Kullanılacak ses profili
-- **Instagram (Meta Graph API)**
-  - `IG_ACCESS_TOKEN`: Instagram/Meta erişim anahtarınız
-  - `IG_USER_ID`: Instagram kullanıcı id
-- **TikTok**
-  - `TIKTOK_ACCESS_TOKEN`: TikTok erişim anahtarınız
-  - `TIKTOK_OPEN_ID`: TikTok open id
-
-Not: Instagram ve TikTok yayınlama entegrasyonları API yetkilendirmelerine bağlıdır. Bu ürün; yayın adımlarını **kurumsal güvenlik** ve **operasyonel doğrulama** prensipleriyle tasarlanmış bir akış olarak sunar. Gerekli izinler/hesap türleri tamamlandıktan sonra yayın adımları üretim ortamında etkinleşir.
+  - `OPENAI_API_KEY`: API anahtarı
+  - `OPENAI_MODEL`: Sohbet modeli (varsayılan: `gpt-4o-mini`)
+  - `OPENAI_TTS_MODEL`: Ses üretimi (ör. `tts-1`)
+  - `OPENAI_TTS_VOICE`: Ses profili (ör. `nova`)
+- **Kling AI**
+  - `KLING_API_KEY`: Kling API anahtarı
+  - `KLING_BASE_URL`: Varsayılan `https://api.klingapi.com`
+  - `KLING_MODEL`: Örn. `kling-v2.5-turbo` (hesap/planınıza göre)
+- **Instagram (Meta Graph API)** — yayın için gerekli izinlerle
+  - `IG_ACCESS_TOKEN`, `IG_USER_ID`
+- **TikTok** — yayın için gerekli izinlerle
+  - `TIKTOK_ACCESS_TOKEN`, `TIKTOK_OPEN_ID`
 
 ## Çalıştırma
-
-Günlük akışı başlatmak için:
 
 ```bash
 python -m app.main
 ```
 
-Bu komut sırasıyla:
+Akış:
 
-1. Günlük kısa video senaryosu üretir.
-2. D-ID ile konuşan video oluşturur ve `output/` içine `.mp4` olarak indirir.
-3. Instagram Reels ve TikTok’a yayınlamayı dener (yetki/ayar yoksa güvenli şekilde hata verir ve loglar).
+1. OpenAI: İngilizce kelime + Türkçe çeviri ve **TTS (.mp3)**.
+2. Kling AI: Kelimeyle ilişkili **kısa arka plan videosu (.mp4)**.
+3. MoviePy: Sesi videoya bağlar, **kelimeyi ortada metin olarak** ekler, **nihai .mp4** üretir.
+4. Yayınlayıcılar: Instagram ve TikTok adımları (hesap/izin yapılandırmasına bağlı).
 
 ## Çıktı Klasörü
 
-- Üretilen tüm videolar `output/` klasöründe saklanır.
-- Dosya adları tarih/saat bazlı üretilir; böylece arşivleme ve izlenebilirlik kolaylaşır.
+- `output/` altında zaman damgalı dosya adlarıyla `.mp3`, arka plan `.mp4` ve nihai `_final.mp4` saklanır.
 
 ## Operasyonel Notlar
 
-- Sistem, istek yoğunluğunu azaltmak için **oran-limit** ve **rastgele gecikme** (insan benzeri bekleme) kullanır.
-- Tüm kritik adımlar loglanır. Loglar hata ayıklama ve operasyonel izleme için tasarlanmıştır.
-- Üretim kullanımında planlanan öneri: Bu komutu Windows Görev Zamanlayıcı veya bir sunucu cron görevi ile günde 1 kez çalıştırmak.
-
-## Sık Karşılaşılan Durumlar
-
-- **Video üretiliyor ama yayınlanmıyor**: Instagram/TikTok API yetkileri veya gerekli hesap türleri eksik olabilir. Loglar ilgili hata mesajını içerir.
-- **D-ID video üretimi gecikiyor**: Sistem otomatik olarak bekler ve tekrar dener. Süre, platform yoğunluğuna göre değişebilir.
+- İstekler **oran-limit** ve **rastgele gecikme** ile yönetilir.
+- Üretimde günlük çalıştırma için Windows Görev Zamanlayıcı veya sunucu zamanlayıcı kullanılabilir.
