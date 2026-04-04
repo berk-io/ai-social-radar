@@ -71,6 +71,7 @@ class OpenAIClient:
         payload: Dict[str, Any] = {
             "model": self._model,
             "temperature": 0.85,
+            "response_format": {"type": "json_object"},
             "messages": [
                 {"role": "system", "content": system_text},
                 {"role": "user", "content": user_text},
@@ -94,6 +95,11 @@ class OpenAIClient:
         try:
             data: Dict[str, Any] = response.json()
             content: str = data["choices"][0]["message"]["content"]
+            
+            # --- İŞTE HAYAT KURTARAN DÜZELTME BURASI ---
+            # OpenAI'ın gönderdiği gereksiz markdown süslemelerini (```json ve ```) temizliyoruz.
+            content = content.replace("```json", "").replace("```", "").strip()
+            
         except Exception as exc:  # noqa: BLE001
             logger.error("OpenAI response parsing failed.", exc_info=True)
             raise RuntimeError("OpenAI response parsing failed") from exc
