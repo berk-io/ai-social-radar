@@ -69,8 +69,7 @@ class KlingClient:
         rate_limiter: RateLimiter,
     ) -> None:
         self._api_key: str = api_key
-        # Cursor'ın yazdığı hatalı adresi otomatik düzeltiyoruz
-        self._base_url: str = base_url.replace("api.klingapi.com", "api.klingai.com").rstrip("/")
+        self._base_url: str = base_url.rstrip("/")
         self._model: str = model
         self._timeout_seconds: float = timeout_seconds
         self._rate_limiter: RateLimiter = rate_limiter
