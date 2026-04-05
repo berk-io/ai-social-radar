@@ -13,7 +13,6 @@ from app.logging_setup import get_logger
 
 logger = get_logger(__name__)
 
-# MoviePy is imported lazily so configuration and dry imports can load without video deps in edge cases.
 _VideoFileClip: Any = None
 _AudioFileClip: Any = None
 _CompositeVideoClip: Any = None

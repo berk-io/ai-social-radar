@@ -96,8 +96,6 @@ class OpenAIClient:
             data: Dict[str, Any] = response.json()
             content: str = data["choices"][0]["message"]["content"]
             
-            # --- İŞTE HAYAT KURTARAN DÜZELTME BURASI ---
-            # OpenAI'ın gönderdiği gereksiz markdown süslemelerini (```json ve ```) temizliyoruz.
             content = content.replace("```json", "").replace("```", "").strip()
             
         except Exception as exc:  # noqa: BLE001
