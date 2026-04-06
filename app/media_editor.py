@@ -6,6 +6,7 @@ a centered text label using MoviePy, producing a single H.264-friendly MP4 for d
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
 from typing import Any, Optional
 
@@ -18,7 +19,6 @@ _AudioFileClip: Any = None
 _CompositeVideoClip: Any = None
 _TextClip: Any = None
 
-
 def _load_moviepy() -> tuple[Any, Any, Any, Any]:
     global _VideoFileClip, _AudioFileClip, _CompositeVideoClip, _TextClip
     if _VideoFileClip is not None:
@@ -27,6 +27,7 @@ def _load_moviepy() -> tuple[Any, Any, Any, Any]:
     try:
         from moviepy.editor import AudioFileClip, CompositeVideoClip, TextClip, VideoFileClip
     except ImportError:
+        # MoviePy v2 imports
         from moviepy import AudioFileClip, CompositeVideoClip, TextClip, VideoFileClip  # type: ignore[no-redef]
 
     _VideoFileClip = VideoFileClip
@@ -34,7 +35,6 @@ def _load_moviepy() -> tuple[Any, Any, Any, Any]:
     _CompositeVideoClip = CompositeVideoClip
     _TextClip = TextClip
     return VideoFileClip, AudioFileClip, CompositeVideoClip, TextClip
-
 
 def compose_word_lesson_video(
     background_video_path: Path,
@@ -52,10 +52,6 @@ def compose_word_lesson_video(
     if not overlay_text.strip():
         raise ValueError("overlay_text must not be empty")
 
-    VideoFileClip: Any
-    AudioFileClip: Any
-    CompositeVideoClip: Any
-    TextClip: Any
     VideoFileClip, AudioFileClip, CompositeVideoClip, TextClip = _load_moviepy()
 
     video_clip: Any = None
@@ -72,34 +68,57 @@ def compose_word_lesson_video(
             raise RuntimeError("Failed to load source media clips") from exc
 
         try:
-            duration: float = float(min(video_clip.duration, audio_clip.duration))
+            # DÜZELTME BURADA: Süreyi en kısa olana göre değil, VİDEONUN KENDİ SÜRESİNE (5 sn) göre sabitliyoruz!
+            duration: float = float(video_clip.duration)
             if duration <= 0:
                 raise RuntimeError("Computed composite duration is not positive")
 
-            video_clip = video_clip.subclip(0, duration)
-            audio_clip = audio_clip.subclip(0, duration)
-            video_with_audio: Any = video_clip.set_audio(audio_clip)
+            try:
+                # v2 API
+                video_clip = video_clip.subclipped(0, duration)
+                # Sesi kesmiyoruz! Sadece videoya yapıştırıyoruz. Ses bitince kendiliğinden susacak.
+                video_with_audio: Any = video_clip.with_audio(audio_clip)
+            except AttributeError:
+                # v1 API fallback
+                video_clip = video_clip.subclip(0, duration)
+                video_with_audio: Any = video_clip.set_audio(audio_clip)
 
             fs: int = font_size if font_size is not None else max(48, int(video_with_audio.h * 0.09))
 
+            font_path = "C:/Windows/Fonts/arial.ttf"
+            
             try:
+                # TextClip Font işleme
                 text_clip = TextClip(
-                    overlay_text,
-                    fontsize=fs,
+                    text=overlay_text,
+                    font_size=fs,
                     color="white",
                     stroke_color="black",
                     stroke_width=2,
+                    font=font_path if os.path.exists(font_path) else None
                 )
-            except Exception as exc:  # noqa: BLE001
-                logger.error(
-                    "TextClip creation failed. If ImageMagick is not installed, install it or configure MoviePy.",
-                    exc_info=True,
-                )
-                raise RuntimeError("Text overlay creation failed") from exc
+            except Exception as e:
+                logger.warning(f"Font hatası, fontsuz deneniyor: {e}")
+                try:
+                    text_clip = TextClip(
+                        text=overlay_text,
+                        font_size=fs,
+                        color="white",
+                        stroke_color="black",
+                        stroke_width=2
+                    )
+                except Exception as exc:
+                    logger.error("TextClip creation failed.", exc_info=True)
+                    raise RuntimeError("Text overlay creation failed") from exc
 
-            text_clip = text_clip.set_position("center").set_duration(duration)
+            try:
+                text_clip = text_clip.with_position("center").with_duration(duration)
+            except AttributeError:
+                text_clip = text_clip.set_position("center").set_duration(duration)
 
             composite = CompositeVideoClip([video_with_audio, text_clip], size=video_with_audio.size)
+            composite.duration = duration
+            
         except Exception as exc:  # noqa: BLE001
             logger.error("Failed to build composite timeline.", exc_info=True)
             raise RuntimeError("Failed to build composite timeline") from exc

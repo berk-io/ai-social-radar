@@ -8,6 +8,7 @@ OpenAI Text-to-Speech API. It uses safe retry behavior and consistent JSON parsi
 from __future__ import annotations
 
 import json
+import random
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, Optional
