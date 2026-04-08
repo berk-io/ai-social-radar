@@ -1,8 +1,8 @@
 """Content pipeline orchestration.
 
 This module coordinates the sequential execution of the daily workflow: vocabulary
-generation and TTS, background video synthesis, media compositing, local persistence,
-and platform publishing.
+generation and TTS, talking-head video synthesis via D-ID, media compositing, 
+local persistence, and platform publishing.
 """
 
 from __future__ import annotations
@@ -12,7 +12,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
 
-from app.clients.kling_client import KlingClient, KlingVideoResult
+from app.clients.did_client import DIDClient, DIDVideoResult
 from app.clients.openai_client import OpenAIClient, WordLessonResult
 from app.config import AppConfig
 from app.http_utils import RateLimiter
@@ -23,21 +23,18 @@ from app.publishers.tiktok_publisher import TikTokPublisher, TikTokPublishResult
 
 logger = get_logger(__name__)
 
-
 @dataclass(frozen=True)
 class PipelineResult:
     lesson: WordLessonResult
-    kling: KlingVideoResult
+    did: DIDVideoResult
     final_video_path: Path
     instagram: Optional[InstagramPublishResult]
     tiktok: Optional[TikTokPublishResult]
-
 
 def _safe_filename_component(value: str) -> str:
     cleaned: str = "".join(ch for ch in value if ch.isalnum() or ch in ("-", "_", " ")).strip()
     cleaned = cleaned.replace(" ", "_")
     return cleaned[:60] if cleaned else "video"
-
 
 def run_daily_pipeline(config: AppConfig, topic_hint: Optional[str] = None) -> PipelineResult:
     output_dir: Path = config.ensure_output_dir()
@@ -56,10 +53,10 @@ def run_daily_pipeline(config: AppConfig, topic_hint: Optional[str] = None) -> P
         timeout_seconds=config.http_timeout_seconds,
         rate_limiter=rate_limiter,
     )
-    kling: KlingClient = KlingClient(
-        api_key=config.kling_api_key,
-        base_url=config.kling_base_url,
-        model=config.kling_model,
+    
+    did_client: DIDClient = DIDClient(
+        api_key=config.d_id_api_key,
+        presenter_id=config.d_id_presenter_id,
         timeout_seconds=config.http_timeout_seconds,
         rate_limiter=rate_limiter,
     )
@@ -75,18 +72,19 @@ def run_daily_pipeline(config: AppConfig, topic_hint: Optional[str] = None) -> P
     )
 
     name_part: str = _safe_filename_component(lesson.english_word)
-    background_path: Path = output_dir / f"{timestamp}_{name_part}_background.mp4"
-    logger.info("Generating background video with Kling AI.")
-    kling_result: KlingVideoResult = kling.generate_background_video(
-        english_word=lesson.english_word,
-        output_path=background_path,
+    raw_video_path: Path = output_dir / f"{timestamp}_{name_part}_did_raw.mp4"
+    
+    logger.info("Generating synchronized talking video with D-ID AI.")
+    did_result: DIDVideoResult = did_client.generate_talking_video(
+        audio_path=lesson.audio_path,
+        output_path=raw_video_path,
     )
 
     final_path: Path = output_dir / f"{timestamp}_{name_part}_final.mp4"
-    logger.info("Compositing final video with MoviePy.")
+    logger.info("Compositing final video with text overlay via MoviePy.")
     try:
         compose_word_lesson_video(
-            background_video_path=kling_result.local_path,
+            background_video_path=did_result.local_path,
             narration_audio_path=lesson.audio_path,
             overlay_text=lesson.english_word,
             output_path=final_path,
@@ -132,7 +130,7 @@ def run_daily_pipeline(config: AppConfig, topic_hint: Optional[str] = None) -> P
 
     return PipelineResult(
         lesson=lesson,
-        kling=kling_result,
+        did=did_result,
         final_video_path=final_path,
         instagram=instagram_result,
         tiktok=tiktok_result,

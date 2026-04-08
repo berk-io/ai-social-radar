@@ -7,6 +7,7 @@ pipeline components.
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
 from typing import Optional
 
@@ -20,13 +21,12 @@ class AppConfig(BaseModel):
     openai_tts_model: str = Field(default="tts-1", min_length=1)
     openai_tts_voice: str = Field(default="nova", min_length=1)
 
-    kling_api_key: str = Field(min_length=1)
-    kling_base_url: str = Field(default="https://api.klingapi.com", min_length=1)
-    kling_model: str = Field(default="kling-v2.5-turbo", min_length=1)
+    # D-ID AI Settings
+    d_id_api_key: str = Field(default="", min_length=0)
+    d_id_presenter_id: str = Field(default="", min_length=0)
 
     ig_access_token: Optional[str] = None
     ig_user_id: Optional[str] = None
-
     tiktok_access_token: Optional[str] = None
     tiktok_open_id: Optional[str] = None
 
@@ -49,20 +49,20 @@ def load_config(dotenv_path: Optional[str] = None) -> AppConfig:
     else:
         load_dotenv()
 
-    import os
-
     config: AppConfig = AppConfig(
         openai_api_key=os.getenv("OPENAI_API_KEY", ""),
         openai_model=os.getenv("OPENAI_MODEL", "gpt-4o-mini"),
         openai_tts_model=os.getenv("OPENAI_TTS_MODEL", "tts-1"),
         openai_tts_voice=os.getenv("OPENAI_TTS_VOICE", "nova"),
-        kling_api_key=os.getenv("KLING_API_KEY", ""),
-        kling_base_url=os.getenv("KLING_BASE_URL", "https://api.klingapi.com"),
-        kling_model=os.getenv("KLING_MODEL", "kling-v2.5-turbo"),
+        
+        d_id_api_key=os.getenv("D_ID_API_KEY", ""),
+        d_id_presenter_id=os.getenv("D_ID_PRESENTER_ID", ""),
+        
         ig_access_token=os.getenv("IG_ACCESS_TOKEN"),
         ig_user_id=os.getenv("IG_USER_ID"),
         tiktok_access_token=os.getenv("TIKTOK_ACCESS_TOKEN"),
         tiktok_open_id=os.getenv("TIKTOK_OPEN_ID"),
+        
         requests_per_minute=int(os.getenv("REQUESTS_PER_MINUTE", "50")),
         min_jitter_seconds=float(os.getenv("MIN_JITTER_SECONDS", "0.6")),
         max_jitter_seconds=float(os.getenv("MAX_JITTER_SECONDS", "2.2")),
