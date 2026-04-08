@@ -40,7 +40,7 @@ def _extract_task_id(data: Dict[str, Any]) -> Optional[str]:
     return None
 
 def _extract_video_url(data: Dict[str, Any]) -> Optional[str]:
-    # Kling'in resmi doküman yapısına göre URL'yi cımbızla
+
     try:
         videos = data.get("data", {}).get("task_result", {}).get("videos", [])
         if videos and isinstance(videos, list) and len(videos) > 0:
@@ -50,7 +50,6 @@ def _extract_video_url(data: Dict[str, Any]) -> Optional[str]:
     except Exception:
         pass
 
-    # Yedek arama mantığı
     for key in ("url", "video_url", "videoUrl", "output_url", "result_url"):
         raw: Any = data.get(key)
         if isinstance(raw, str) and raw.startswith("http"):
@@ -85,7 +84,6 @@ class KlingClient:
         self._timeout_seconds: float = timeout_seconds
         self._rate_limiter: RateLimiter = rate_limiter
 
-        # KlingClient sınıfına yeni metod ekle:
     def create_task_with_custom_prompt(self, prompt: str) -> str:
         url = f"{self._base_url}/v1/videos/text2video"
         headers = {
@@ -143,7 +141,7 @@ class KlingClient:
             "Authorization": f"Bearer {self._get_jwt_token()}",
             "Content-Type": "application/json",
         }
-        # Model adını dokümandaki resmi formatta (noktasız, tireli) zorluyoruz!
+
         payload: Dict[str, Any] = {
             "model_name": "kling-v2-5-turbo",
             "prompt": self._build_visual_prompt(english_word=english_word),
@@ -151,10 +149,8 @@ class KlingClient:
             "aspect_ratio": "9:16",
         }
 
-        # Tekrar denemeleri kapatıp direkt Kling'in cevabını yakalıyoruz
         response = requests.post(url, headers=headers, json=payload, timeout=self._timeout_seconds)
         
-        # Eğer cevap 200 OK değilse, hatayı maskesiz olarak ekrana bas!
         if response.status_code != 200:
             logger.error(f"KLING GİŞEDEN KOVDU! Kod: {response.status_code}, Sebep: {response.text}")
             raise RuntimeError(f"Kling API Hatası: {response.text}")
@@ -172,6 +168,48 @@ class KlingClient:
 
         return task_id
 
+    def create_image_to_video_task(self, image_path: Path, prompt: str = "") -> str:
+        """Submit an image-to-video generation task to Kling API using a local image."""
+        url: str = f"{self._base_url}/v1/videos/image2video"
+        headers: Dict[str, str] = {
+            "Authorization": f"Bearer {self._get_jwt_token()}",
+            "Content-Type": "application/json",
+        }
+
+        try:
+            with open(image_path, "rb") as image_file:
+                image_b64: str = base64.b64encode(image_file.read()).decode("utf-8")
+        except Exception as exc:
+            logger.error("Failed to read and encode image file: %s", image_path, exc_info=True)
+            raise RuntimeError("Image processing failed") from exc
+
+        payload: Dict[str, Any] = {
+            "model_name": "kling-v2-5-turbo",
+            "image": image_b64,
+            "prompt": prompt,
+            "duration": "10",
+        }
+
+        logger.info("Submitting image2video task to Kling...")
+        response = requests.post(url, headers=headers, json=payload, timeout=self._timeout_seconds)
+        
+        if response.status_code != 200:
+            logger.error("Kling API rejected the image2video request. Code: %s, Reason: %s", response.status_code, response.text)
+            raise RuntimeError(f"Kling API Error: {response.text}")
+
+        try:
+            body: Dict[str, Any] = response.json()
+        except Exception as exc:
+            logger.error("Kling image2video response parsing failed.", exc_info=True)
+            raise RuntimeError("Kling image2video response parsing failed") from exc
+
+        task_id: Optional[str] = _extract_task_id(body)
+        if not task_id:
+            logger.error("Kling response missing task id. Body: %s", body)
+            raise RuntimeError("Kling response missing task id")
+
+        logger.info("Kling image2video task created successfully. Task ID: %s", task_id)
+        return task_id
 
     def wait_for_video_url(self, task_id: str, max_wait_seconds: int = 900) -> str:
         url: str = f"{self._base_url}/v1/videos/text2video/{task_id}"
@@ -210,7 +248,6 @@ class KlingClient:
                 time.sleep(3.0)
                 continue
 
-            # Kling'in resmi doküman yapısına göre Task Status'u cımbızla
             status_raw: Optional[str] = None
             if isinstance(body.get("data"), dict):
                 status_raw = body["data"].get("task_status") or body["data"].get("status")
