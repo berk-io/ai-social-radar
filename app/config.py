@@ -44,7 +44,7 @@ class AppConfig(BaseModel):
 
 
 def load_config(dotenv_path: Optional[str] = None) -> AppConfig:
-    if dotenv_path is not None:
+    if dotenv_path is not None: 
         load_dotenv(dotenv_path)
     else:
         load_dotenv()
