@@ -1,8 +1,7 @@
-"""D-ID AI client wrapper (V3 Pro Avatars - Clips API).
+"""D-ID AI client wrapper (V2 Photo Avatars - Talks API).
 
-This module interacts with the D-ID API to upload narration audio, 
-submit a video task using a pre-existing Presenter ID from the user's account,
-poll for completion, and download the synchronized video clip.
+This module interacts with the D-ID API to upload a custom image, upload narration audio,
+submit a video task via the /talks endpoint, poll for completion, and download the video.
 """
 
 from __future__ import annotations
@@ -21,7 +20,7 @@ logger = get_logger(__name__)
 
 @dataclass(frozen=True)
 class DIDVideoResult:
-    clip_id: str
+    talk_id: str
     video_url: str
     local_path: Path
 
@@ -34,12 +33,11 @@ class DIDClient:
     def __init__(
         self,
         api_key: str,
-        presenter_id: str,
         timeout_seconds: float,
         rate_limiter: RateLimiter,
     ) -> None:
         self._api_key: str = api_key
-        self._presenter_id: str = presenter_id
+        # Not: Artık presenter_id'ye ihtiyacımız yok, onu sildik.
         self._base_url: str = "https://api.d-id.com"
         self._timeout_seconds: float = timeout_seconds
         self._rate_limiter: RateLimiter = rate_limiter
@@ -51,18 +49,17 @@ class DIDClient:
         username, password = self._api_key.split(":", 1)
         return username.strip(), password.strip()
 
-    def _upload_audio(self, audio_path: Path) -> str:
-        """Uploads the TTS audio file to D-ID and returns the internal URL."""
-        url: str = f"{self._base_url}/audios"
-        
-        logger.info(f"Uploading audio {audio_path.name} to D-ID...")
-        
+    def _upload_file(self, file_path: Path, endpoint: str, file_key: str, content_type: str) -> str:
+        """Generic file upload functionality for both images and audios."""
+        url: str = f"{self._base_url}/{endpoint}"
+        logger.info(f"Uploading {file_path.name} to D-ID (/{endpoint})...")
+
         def do_request() -> requests.Response:
-            with open(audio_path, "rb") as f:
+            with open(file_path, "rb") as f:
                 return requests.post(
-                    url, 
-                    auth=self._get_auth(), 
-                    files={"audio": f}, 
+                    url,
+                    auth=self._get_auth(),
+                    files={file_key: (file_path.name, f, content_type)},
                     timeout=self._timeout_seconds
                 )
 
@@ -71,42 +68,45 @@ class DIDClient:
                 request_fn=do_request,
                 policy=RetryPolicy(max_attempts=3, base_sleep_seconds=1.0, max_sleep_seconds=15.0),
                 rate_limiter=self._rate_limiter,
-                context={"service": "d-id", "operation": "upload_audio"},
+                context={"service": "d-id", "operation": f"upload_{file_key}"},
             )
         except Exception as exc:
-            logger.error("D-ID audio upload failed.", exc_info=True)
-            raise RuntimeError("D-ID audio upload failed") from exc
+            logger.error(f"D-ID {file_key} upload failed.", exc_info=True)
+            raise RuntimeError(f"D-ID {file_key} upload failed") from exc
 
         body = response.json()
-        audio_url = body.get("url")
-        if not audio_url:
+        file_url = body.get("url")
+        if not file_url:
             raise RuntimeError(f"D-ID response missing url. Body: {body}")
 
-        return audio_url
+        return file_url
 
-    def create_clip_task(self, audio_path: Path) -> str:
-        """Uploads audio and creates a V3 Pro Avatar video clip task."""
-        if not self._presenter_id:
-            raise ValueError("Presenter ID is missing! Cannot generate D-ID video.")
+    def create_talk_task(self, image_path: Path, audio_path: Path) -> str:
+        """Uploads custom image and audio, then creates a V2 Photo Avatar talk task."""
+        # 1. Önce mandalina resmini yüklüyoruz
+        image_url = self._upload_file(image_path, "images", "image", "image/jpeg")
+        # 2. Sonra sesi yüklüyoruz
+        audio_url = self._upload_file(audio_path, "audios", "audio", "audio/mpeg")
 
-        audio_url = self._upload_audio(audio_path)
-
-        url: str = f"{self._base_url}/clips"
+        url: str = f"{self._base_url}/talks"
         payload = {
-            "presenter_id": self._presenter_id,
+            "source_url": image_url,
             "script": {
                 "type": "audio",
                 "audio_url": audio_url
+            },
+            "config": {
+                "stitch": True 
             }
         }
 
-        logger.info(f"Submitting Clip video task to D-ID using Presenter {self._presenter_id}...")
-        
+        logger.info("Submitting custom Talk video task to D-ID...")
+
         def do_request() -> requests.Response:
             return requests.post(
-                url, 
-                auth=self._get_auth(), 
-                json=payload, 
+                url,
+                auth=self._get_auth(),
+                json=payload,
                 timeout=self._timeout_seconds
             )
 
@@ -114,24 +114,22 @@ class DIDClient:
             request_fn=do_request,
             policy=RetryPolicy(max_attempts=3, base_sleep_seconds=1.0, max_sleep_seconds=15.0),
             rate_limiter=self._rate_limiter,
-            context={"service": "d-id", "operation": "create_clip"},
+            context={"service": "d-id", "operation": "create_talk"},
         )
-        
+
         body = response.json()
-        clip_id = body.get("id")
-        if not clip_id:
-            raise RuntimeError(f"D-ID clip creation failed. Body: {body}")
-            
-        logger.info(f"D-ID task created successfully. Clip ID: {clip_id}")
-        return clip_id
+        talk_id = body.get("id")
+        if not talk_id:
+            raise RuntimeError(f"D-ID talk creation failed. Body: {body}")
 
-    def wait_for_video_url(self, clip_id: str, max_wait_seconds: int = 900) -> str:
-        """Polls the D-ID /clips endpoint until the video is ready."""
-        url: str = f"{self._base_url}/clips/{clip_id}"
+        logger.info(f"D-ID task created successfully. Talk ID: {talk_id}")
+        return talk_id
 
+    def wait_for_video_url(self, talk_id: str, max_wait_seconds: int = 900) -> str:
+        """Polls the D-ID /talks endpoint until the video is ready."""
+        url: str = f"{self._base_url}/talks/{talk_id}"
         start: float = time.monotonic()
         last_status: Optional[str] = None
-        
         terminal_fail: set[str] = {"error", "rejected", "failed"}
         terminal_ok: set[str] = {"done"}
 
@@ -147,13 +145,12 @@ class DIDClient:
                 request_fn=do_request,
                 policy=RetryPolicy(max_attempts=4, base_sleep_seconds=1.0, max_sleep_seconds=15.0),
                 rate_limiter=self._rate_limiter,
-                context={"service": "d-id", "operation": "get_clip", "clip_id": clip_id},
+                context={"service": "d-id", "operation": "get_talk", "talk_id": talk_id},
             )
 
             body = response.json()
-            status_raw = body.get("status")
-            status: str = _normalize_status(status_raw)
-            
+            status: str = _normalize_status(body.get("status"))
+
             if status and status != last_status:
                 logger.info(f"D-ID task status: {status}")
                 last_status = status
@@ -170,14 +167,13 @@ class DIDClient:
 
     def download_video(self, video_url: str, output_path: Path) -> Path:
         """Downloads the finalized MP4 from D-ID."""
-        logger.info(f"Downloading final video from D-ID...")
-        
+        logger.info("Downloading final video from D-ID...")
         def do_request() -> requests.Response:
             return requests.get(video_url, timeout=self._timeout_seconds, stream=True)
 
         response: requests.Response = request_with_retries(
             request_fn=do_request,
-            policy=RetryPolicy(max_attempts=5, base_sleep_seconds=1.0, max_sleep_seconds=25.0),
+            policy=RetryPolicy(max_attempts=5, base_sleep_seconds=2.0, max_sleep_seconds=25.0),
             rate_limiter=self._rate_limiter,
             context={"service": "d-id", "operation": "download_video"},
         )
@@ -187,12 +183,12 @@ class DIDClient:
             for chunk in response.iter_content(chunk_size=1024 * 1024):
                 if chunk:
                     f.write(chunk)
-                    
+
         return output_path
 
-    def generate_talking_video(self, audio_path: Path, output_path: Path) -> DIDVideoResult:
-        """Main orchestrator: creates clip task from audio, waits, and downloads."""
-        clip_id: str = self.create_clip_task(audio_path=audio_path)
-        video_url: str = self.wait_for_video_url(clip_id=clip_id)
+    def generate_talking_video(self, image_path: Path, audio_path: Path, output_path: Path) -> DIDVideoResult:
+        """Main orchestrator: uploads files, creates talk task, waits, and downloads."""
+        talk_id: str = self.create_talk_task(image_path=image_path, audio_path=audio_path)
+        video_url: str = self.wait_for_video_url(talk_id=talk_id)
         self.download_video(video_url=video_url, output_path=output_path)
-        return DIDVideoResult(clip_id=clip_id, video_url=video_url, local_path=output_path.resolve())
+        return DIDVideoResult(talk_id=talk_id, video_url=video_url, local_path=output_path.resolve())

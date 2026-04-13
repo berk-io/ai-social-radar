@@ -54,10 +54,10 @@ def run_daily_pipeline(config: AppConfig, topic_hint: Optional[str] = None) -> P
         rate_limiter=rate_limiter,
     )
     
+    # GÜNCELLEME: presenter_id silindi, yeni API yapısına uyumlu hale getirildi.
     did_client: DIDClient = DIDClient(
         api_key=config.d_id_api_key,
-        presenter_id=config.d_id_presenter_id,
-        timeout_seconds=config.http_timeout_seconds,
+        timeout_seconds=120.0,
         rate_limiter=rate_limiter,
     )
 
@@ -74,8 +74,10 @@ def run_daily_pipeline(config: AppConfig, topic_hint: Optional[str] = None) -> P
     name_part: str = _safe_filename_component(lesson.english_word)
     raw_video_path: Path = output_dir / f"{timestamp}_{name_part}_did_raw.mp4"
     
-    logger.info("Generating synchronized talking video with D-ID AI.")
+    logger.info("Generating synchronized talking video with D-ID AI using custom image.")
+    # GÜNCELLEME: image_path parametresi eklendi. Resmin ana dizinde olduğu varsayılır.
     did_result: DIDVideoResult = did_client.generate_talking_video(
+        image_path=Path("mandalina_avatar.jpg"),
         audio_path=lesson.audio_path,
         output_path=raw_video_path,
     )
