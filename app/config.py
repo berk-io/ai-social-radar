@@ -35,6 +35,8 @@ class AppConfig(BaseModel):
     max_jitter_seconds: float = Field(default=2.2, ge=0.0, le=60.0)
     http_timeout_seconds: float = Field(default=45.0, ge=1.0, le=300.0)
 
+    # Telegram Bot Token buraya eklendi
+    telegram_bot_token: str = Field(default="", min_length=0)
     output_dir: str = Field(default="output", min_length=1)
 
     def ensure_output_dir(self) -> Path:
@@ -49,6 +51,7 @@ def load_config(dotenv_path: Optional[str] = None) -> AppConfig:
     else:
         load_dotenv()
 
+    # Değişkenleri doğrudan AppConfig içine paslıyoruz
     config: AppConfig = AppConfig(
         openai_api_key=os.getenv("OPENAI_API_KEY", ""),
         openai_model=os.getenv("OPENAI_MODEL", "gpt-4o-mini"),
@@ -67,6 +70,9 @@ def load_config(dotenv_path: Optional[str] = None) -> AppConfig:
         min_jitter_seconds=float(os.getenv("MIN_JITTER_SECONDS", "0.6")),
         max_jitter_seconds=float(os.getenv("MAX_JITTER_SECONDS", "2.2")),
         http_timeout_seconds=float(os.getenv("HTTP_TIMEOUT_SECONDS", "45")),
+        
+        # Telegram token'ı buradan sisteme giriyor
+        telegram_bot_token=os.getenv("TELEGRAM_BOT_TOKEN", ""),
         output_dir=os.getenv("OUTPUT_DIR", "output"),
     )
     return config

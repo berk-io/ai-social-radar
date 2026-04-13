@@ -83,8 +83,13 @@ class DIDClient:
 
     def create_talk_task(self, image_path: Path, audio_path: Path) -> str:
         """Uploads custom image and audio, then creates a V2 Photo Avatar talk task."""
-        # 1. Önce mandalina resmini yüklüyoruz
-        image_url = self._upload_file(image_path, "images", "image", "image/jpeg")
+        
+        # Dosya uzantısına bak, PNG ise image/png de, yoksa image/jpeg de
+        mime_type = "image/png" if image_path.suffix.lower() == ".png" else "image/jpeg"
+        
+        # 1. Resmi yüklüyoruz (Dinamik MIME type ile)
+        image_url = self._upload_file(image_path, "images", "image", mime_type)
+        
         # 2. Sonra sesi yüklüyoruz
         audio_url = self._upload_file(audio_path, "audios", "audio", "audio/mpeg")
 
