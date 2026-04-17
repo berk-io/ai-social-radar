@@ -2,7 +2,7 @@
 
 This enterprise-grade automation pipeline generates daily English vocabulary lessons in a short vertical video format. It orchestrates OpenAI for content and voice synthesis, D-ID AI for highly realistic, lip-synced avatar generation, and MoviePy for automated text overlays and media compositing. The final assets are staged for seamless distribution to Instagram Reels and TikTok.
 
-## Business Value
+## Business Value 
 
 - **Automated Content Generation:** Seamlessly orchestrates text, audio, and video synthesis into a single command workflow.
 - **Brand Consistency:** Utilizes a fixed D-ID Presenter ID to maintain a recognizable, consistent AI mascot/avatar across all daily videos.
